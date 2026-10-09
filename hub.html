@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ask All</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="hub.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Ask All</h1>
+    <span class="sub">one question, every AI tab you're logged in to</span>
+    <span class="spacer"></span>
+    <button id="historyToggle" class="ghost" title="Show / hide history">History</button>
+    <a class="ghost btnlink" href="settings.html" target="_blank">Settings</a>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="ask card">
+        <textarea id="question" rows="4" placeholder="Type your question (or paste a claim to fact-check)…  Ctrl+Enter sends"></textarea>
+        <div class="row">
+          <div id="siteToggles" class="toggles"></div>
+        </div>
+        <div class="row">
+          <label class="chk" title="Wraps your question in a prompt that asks each AI to list the claims and mark each True / False / Outdated / Unclear with dates and source links">
+            <input type="checkbox" id="factCheck"> Fact-check mode
+          </label>
+          <label class="chk" title="Open a fresh chat on each site for every question (recommended)">
+            <input type="checkbox" id="newChat"> New chat each round
+          </label>
+          <span class="spacer"></span>
+          <button id="sendBtn" class="primary">Send to all</button>
+        </div>
+        <div id="roundInfo" class="muted small"></div>
+      </section>
+
+      <section id="panels" class="panels"></section>
+
+      <section class="combine card">
+        <div class="row">
+          <h2>Combined answer</h2>
+          <span class="spacer"></span>
+          <label class="small">Written by
+            <select id="combiner"></select>
+          </label>
+          <button id="combineBtn" class="primary">Combine</button>
+        </div>
+        <div id="mapping" class="mapping small"></div>
+        <div class="panel combined" id="combinedPanel">
+          <div class="phead">
+            <span class="pname">Combined</span>
+            <span class="badge" id="combinedStatus">idle</span>
+            <span class="spacer"></span>
+            <button class="mini" id="combinedCopy">Copy</button>
+            <button class="mini" id="combinedGo">Go to tab</button>
+          </div>
+          <div class="perr" id="combinedErr"></div>
+          <div class="pbody" id="combinedBody"><span class="muted">Press Combine after the answers are in. The answers are sent as Answer A, B, C… so the combining AI doesn't know which AI wrote which.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <aside id="history" class="history card">
+      <div class="row">
+        <h2>History</h2>
+        <span class="spacer"></span>
+        <button id="clearHistory" class="mini">Clear</button>
+      </div>
+      <div class="muted small">Last 50 rounds, kept only on this PC.</div>
+      <ol id="historyList"></ol>
+    </aside>
+  </div>
+
+  <script src="sites.js"></script>
+  <script src="runner.js"></script>
+  <script src="hub.js"></script>
+</body>
+</html>

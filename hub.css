@@ -1,0 +1,56 @@
+:root {
+  --bg: #0f1115; --card: #171a21; --line: #2a2f3a; --text: #e7e9ee; --muted: #8b93a3;
+  --accent: #5b8cff; --ok: #2fbf71; --warn: #e0a526; --err: #ef5350;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, "Segoe UI", Roboto, sans-serif; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 15px; margin: 0; }
+.top { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 2; }
+.sub { color: var(--muted); }
+.spacer { flex: 1; }
+.layout { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
+main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.row:first-child { margin-top: 0; }
+textarea, select, input[type=number] { background: #0c0e12; color: var(--text); border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+textarea { width: 100%; padding: 10px; resize: vertical; }
+select { padding: 4px 6px; }
+button, .btnlink { background: #232836; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; font: inherit; cursor: pointer; text-decoration: none; }
+button:hover, .btnlink:hover { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.ghost, .btnlink.ghost { background: transparent; }
+button.mini { padding: 2px 9px; font-size: 12px; }
+.chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.toggles label { border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px 3px 8px; display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.toggles label.on { border-color: var(--accent); background: rgba(91,140,255,.12); }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; min-height: 140px; }
+.panel.combined { margin-top: 10px; background: #12151b; }
+.phead { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.pname { font-weight: 700; }
+.badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #2a2f3a; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.badge.opening, .badge.typing, .badge.waiting { background: rgba(224,165,38,.18); color: var(--warn); }
+.badge.done { background: rgba(47,191,113,.18); color: var(--ok); }
+.badge.error, .badge.timeout { background: rgba(239,83,80,.18); color: var(--err); }
+.perr { color: var(--err); font-size: 12px; padding: 0 12px; }
+.perr:empty { display: none; }
+.perr { padding-top: 6px; }
+.pbody { padding: 10px 12px; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; max-height: 520px; }
+.pbody a { color: var(--accent); }
+.mapping:empty { display: none; }
+.mapping { margin-top: 8px; color: var(--muted); }
+.mapping b { color: var(--text); }
+.history { width: 300px; flex-shrink: 0; max-height: calc(100vh - 90px); overflow-y: auto; position: sticky; top: 70px; }
+.history.hidden { display: none; }
+.history ol { list-style: none; padding: 0; margin: 10px 0 0; }
+.history li { padding: 8px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; cursor: pointer; }
+.history li:hover, .history li.active { border-color: var(--accent); }
+.history .q { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.history .meta { font-size: 11px; color: var(--muted); }
+@media (max-width: 1000px) { .layout { flex-direction: column; } .history { width: 100%; position: static; max-height: none; } }
