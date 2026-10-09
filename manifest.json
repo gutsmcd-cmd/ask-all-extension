@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Ask All (PC)",
   "short_name": "Ask All",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Ask one question to Grok, ChatGPT, Claude, Gemini (and optionally Meta AI and DeepSeek) in your own logged-in tabs, then combine the answers.",
   "minimum_chrome_version": "120",
   "action": {

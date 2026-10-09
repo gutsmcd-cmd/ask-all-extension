@@ -1,8 +1,11 @@
-// Ask All (PC) - shared logic for the Hub and Settings pages.
-// Opens/finds the site tabs, injects content.js, sends the question once,
-// then reads the newest reply until it is finished.
+// Ask All - shared logic for the Hub and Settings pages (and, in Firefox, the
+// background page). Opens/finds the site tabs, injects content.js, sends the
+// question once, then reads the newest reply until it is finished.
+// Uses `ext` from compat.js (browser.* in Firefox, chrome.* in Chrome).
 
 const AskAll = (() => {
+  const ext = globalThis.ext || globalThis.chrome;
+  const ENV = globalThis.AskAllEnv || { isFirefox: false, hasWindows: true, isAndroid: false, platform: async () => ({ android: false }) };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const SITES = globalThis.ASK_ALL_SITES;
   const siteById = (id) => SITES.find((s) => s.id === id);
@@ -16,13 +19,17 @@ const AskAll = (() => {
     timeout: 'Timed out waiting for the answer. Any partial answer is shown.',
     tab_closed: 'The tab was closed.',
     no_access: 'Could not access the page (it may be a login or error page).',
-    load_timeout: 'The page took too long to load.'
+    load_timeout: 'The page took too long to load.',
+    stopped: 'Stopped before it finished.'
   };
 
   // ---------- storage ----------
   async function getSettings() {
-    const { settings } = await chrome.storage.local.get('settings');
-    const d = globalThis.ASK_ALL_DEFAULT_SETTINGS;
+    const { settings } = await ext.storage.local.get('settings');
+    // Settings added for Firefox / phones (kept here so sites.js stays selector-only):
+    //   runMode 'auto' = all at once on a computer, one at a time on Android
+    //   (Android freezes tabs that are not on screen); layout 'auto' = computer grid.
+    const d = Object.assign({ runMode: 'auto', returnToHub: true, layout: 'auto', layoutChosen: false }, globalThis.ASK_ALL_DEFAULT_SETTINGS);
     const s = Object.assign({}, d, settings || {});
     s.enabled = Object.assign({}, d.enabled, (settings && settings.enabled) || {});
     return s;
@@ -30,11 +37,11 @@ const AskAll = (() => {
   async function saveSettings(patch) {
     const s = await getSettings();
     Object.assign(s, patch);
-    await chrome.storage.local.set({ settings: s });
+    await ext.storage.local.set({ settings: s });
     return s;
   }
   async function getOverrides() {
-    const { overrides } = await chrome.storage.local.get('overrides');
+    const { overrides } = await ext.storage.local.get('overrides');
     return overrides || {};
   }
   async function cfgFor(siteId) {
@@ -42,7 +49,7 @@ const AskAll = (() => {
   }
 
   async function getHistory() {
-    const { history } = await chrome.storage.local.get('history');
+    const { history } = await ext.storage.local.get('history');
     return Array.isArray(history) ? history : [];
   }
   async function putRound(round) {
@@ -51,9 +58,9 @@ const AskAll = (() => {
     const copy = JSON.parse(JSON.stringify(round));
     if (i >= 0) h[i] = copy; else h.unshift(copy);
     h.sort((a, b) => b.ts - a.ts);
-    await chrome.storage.local.set({ history: h.slice(0, 50) });
+    await ext.storage.local.set({ history: h.slice(0, 50) });
   }
-  async function clearHistory() { await chrome.storage.local.set({ history: [] }); }
+  async function clearHistory() { await ext.storage.local.set({ history: [] }); }
 
   // ---------- tabs ----------
   const hostOk = (site, url) => {
@@ -61,22 +68,22 @@ const AskAll = (() => {
   };
 
   async function rememberTab(siteId, tabId) {
-    const { tabIds } = await chrome.storage.session.get('tabIds');
+    const { tabIds } = await ext.storage.session.get('tabIds');
     const t = tabIds || {};
     t[siteId] = tabId;
-    await chrome.storage.session.set({ tabIds: t });
+    await ext.storage.session.set({ tabIds: t });
   }
 
   async function existingTab(site) {
-    const { tabIds } = await chrome.storage.session.get('tabIds');
+    const { tabIds } = await ext.storage.session.get('tabIds');
     const id = tabIds && tabIds[site.id];
     if (id != null) {
       try {
-        const t = await chrome.tabs.get(id);
+        const t = await ext.tabs.get(id);
         if (hostOk(site, t.url || t.pendingUrl || '')) return t;
       } catch (e) { /* closed */ }
     }
-    const tabs = await chrome.tabs.query({ url: site.match });
+    const tabs = await ext.tabs.query({ url: site.match });
     if (!tabs.length) return null;
     tabs.sort((a, b) => (b.pinned - a.pinned) || (b.lastAccessed || 0) - (a.lastAccessed || 0));
     return tabs[0];
@@ -86,12 +93,12 @@ const AskAll = (() => {
     const t0 = Date.now();
     // give a just-started navigation a moment to switch to "loading"
     while (Date.now() - t0 < 1500) {
-      const t = await chrome.tabs.get(tabId);
+      const t = await ext.tabs.get(tabId);
       if (t.status === 'loading') break;
       await sleep(100);
     }
     while (Date.now() - t0 < ms) {
-      const t = await chrome.tabs.get(tabId);
+      const t = await ext.tabs.get(tabId);
       if (t.status === 'complete') return t;
       await sleep(250);
     }
@@ -99,12 +106,19 @@ const AskAll = (() => {
   }
 
   // Find the site's tab (or open a pinned background one) and optionally go to a new chat.
-  async function prepareTab(site, cfg, { fresh, pin }) {
+  // active: bring the tab to the front (one-at-a-time mode; needed on Android,
+  // where tabs that are not on screen are frozen and never finish their answer).
+  async function prepareTab(site, cfg, { fresh, pin, active }) {
     let tab = await existingTab(site);
     if (!tab) {
-      tab = await chrome.tabs.create({ url: cfg.newChatUrl, active: false, pinned: !!pin });
-    } else if (fresh) {
-      await chrome.tabs.update(tab.id, { url: cfg.newChatUrl });
+      const props = { url: cfg.newChatUrl, active: !!active };
+      if (pin && !ENV.isAndroid) props.pinned = true; // no pinned tabs on Android
+      tab = await ext.tabs.create(props);
+    } else if (fresh || active) {
+      const upd = {};
+      if (fresh) upd.url = cfg.newChatUrl;
+      if (active) upd.active = true;
+      await ext.tabs.update(tab.id, upd);
     }
     await rememberTab(site.id, tab.id);
     const done = await waitComplete(tab.id, 45000);
@@ -116,8 +130,8 @@ const AskAll = (() => {
   }
 
   async function call(tabId, action, ...args) {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-    const [res] = await chrome.scripting.executeScript({
+    await ext.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+    const [res] = await ext.scripting.executeScript({
       target: { tabId },
       func: (a, xs) => window.__askAll[a](...xs),
       args: [action, args]
@@ -128,8 +142,10 @@ const AskAll = (() => {
   async function focusTab(tabId) {
     if (tabId == null) return false;
     try {
-      const t = await chrome.tabs.update(tabId, { active: true });
-      await chrome.windows.update(t.windowId, { focused: true });
+      const t = await ext.tabs.update(tabId, { active: true });
+      if (ENV.hasWindows && t && t.windowId != null) {
+        try { await ext.windows.update(t.windowId, { focused: true }); } catch (e) { /* ignore */ }
+      }
       return true;
     } catch (e) { return false; }
   }
@@ -155,7 +171,7 @@ const AskAll = (() => {
     };
     try {
       update({ status: 'opening', text: '', error: null, detail: '' });
-      const prep = await prepareTab(site, cfg, { fresh: opts.fresh, pin: settings.pinTabs });
+      const prep = await prepareTab(site, cfg, { fresh: opts.fresh, pin: opts.pin != null ? opts.pin : settings.pinTabs, active: !!opts.active });
       result.tabId = prep.tab && prep.tab.id;
       update({ tabId: result.tabId });
       if (prep.error) return fail(prep.error, prep.detail);
@@ -179,9 +195,14 @@ const AskAll = (() => {
       let lastBusy = Date.now();
       while (true) {
         await sleep(settings.pollMs || 700);
+        if (opts.cancel && opts.cancel.stopped) {
+          Object.assign(result, { status: 'stopped', error: 'stopped', text: lastText });
+          update({ status: 'stopped', error: 'stopped', text: lastText });
+          return result;
+        }
         let r;
         try {
-          await chrome.tabs.get(result.tabId);
+          await ext.tabs.get(result.tabId);
         } catch (e) { return fail('tab_closed', '', lastText); }
         try { r = await call(result.tabId, 'read', cfg); } catch (e) { r = null; }
         const now = Date.now();
@@ -209,20 +230,92 @@ const AskAll = (() => {
   }
 
   // Settings > Test site: find the tab (do not navigate if it is open) and look for the composer.
-  async function testSite(siteId) {
+  // returnTabId: on Android the site tab has to be in front to be checked; go back
+  // to this tab (the Settings page) afterwards.
+  async function testSite(siteId, returnTabId) {
+    await ENV.platform();
     const site = siteById(siteId);
     const cfg = await cfgFor(siteId);
     const settings = await getSettings();
-    const prep = await prepareTab(site, cfg, { fresh: false, pin: settings.pinTabs });
-    if (prep.error) return { ok: false, error: prep.error, detail: prep.detail, message: ERRORS[prep.error] };
-    let r = null;
-    const t0 = Date.now();
-    while (Date.now() - t0 < 15000) {
-      try { r = await call(prep.tab.id, 'probe', cfg); } catch (e) { r = { error: String(e.message || e) }; }
-      if (r && r.composer) break;
-      await sleep(1000);
+    const active = !!ENV.isAndroid;
+    try {
+      const prep = await prepareTab(site, cfg, { fresh: false, pin: settings.pinTabs, active });
+      if (prep.error) return { ok: false, error: prep.error, detail: prep.detail, message: ERRORS[prep.error] };
+      let r = null;
+      const t0 = Date.now();
+      while (Date.now() - t0 < 15000) {
+        try { r = await call(prep.tab.id, 'probe', cfg); } catch (e) { r = { error: String(e.message || e) }; }
+        if (r && r.composer) break;
+        await sleep(1000);
+      }
+      return Object.assign({ ok: !!(r && r.composer), tabId: prep.tab.id }, r || {});
+    } finally {
+      if (active && returnTabId != null) await focusTab(returnTabId);
     }
-    return Object.assign({ ok: !!(r && r.composer), tabId: prep.tab.id }, r || {});
+  }
+
+  // ---------- a whole job (round / retry / combine) ----------
+  // Runs in the Hub page (Chrome) or in the Firefox background page.
+  // job: { kind: 'round' | 'retry' | 'combine', round, siteId?, settings?, sequential?, hubTabId?, cancel? }
+  // hooks.publish(round, force) is called whenever the round changes.
+  const ACTIVE = ['opening', 'typing', 'waiting', 'queued'];
+  async function runJob(job, hooks) {
+    await ENV.platform();
+    const round = job.round;
+    const settings = job.settings || (await getSettings());
+    const cancel = job.cancel || { stopped: false };
+    const sequential = !!job.sequential;
+    const pin = !!settings.pinTabs && !ENV.isAndroid && !sequential;
+    const publish = (force) => { try { hooks.publish(round, force); } catch (e) { /* page gone */ } };
+    const textOnly = (patch) => Object.keys(patch).every((k) => k === 'text');
+
+    async function one(id) {
+      if (cancel.stopped) {
+        round.answers[id] = Object.assign(round.answers[id] || {}, { status: 'stopped', error: 'stopped', detail: '' });
+        publish(true);
+        return;
+      }
+      round.answers[id] = Object.assign({ text: '' }, round.answers[id] || {}, { status: 'opening', text: '', error: null, detail: '' });
+      publish(true);
+      const res = await runSite(id, round.prompt, {
+        settings, pin, cancel,
+        fresh: settings.newChatEachRound,
+        active: sequential,
+        update: (patch) => { Object.assign(round.answers[id], patch); publish(!textOnly(patch)); }
+      });
+      Object.assign(round.answers[id], { status: res.status, text: res.text, error: res.error, detail: res.detail, tabId: res.tabId, ms: Date.now() - res.startedAt });
+      publish(true);
+      await putRound(round);
+    }
+
+    try {
+      if (job.kind === 'round') {
+        if (sequential) {
+          for (const id of round.sites) round.answers[id] = { status: 'queued', text: '' };
+          publish(true);
+          for (const id of round.sites) await one(id);
+        } else {
+          await Promise.all(round.sites.map((id) => one(id)));
+        }
+      } else if (job.kind === 'retry') {
+        await one(job.siteId);
+      } else if (job.kind === 'combine') {
+        const c = round.combined;
+        const res = await runSite(c.siteId, c.prompt, {
+          settings, pin, cancel,
+          fresh: true, // always a NEW chat for the combined answer
+          active: sequential,
+          update: (patch) => { Object.assign(c, patch); publish(!textOnly(patch)); }
+        });
+        Object.assign(c, { status: res.status, text: res.text, error: res.error, detail: res.detail, tabId: res.tabId });
+        publish(true);
+        await putRound(round);
+      }
+    } finally {
+      // One-at-a-time mode moved the site tabs to the front: come back to the Hub.
+      if (sequential && job.hubTabId != null && settings.returnToHub !== false) await focusTab(job.hubTabId);
+    }
+    return round;
   }
 
   // ---------- prompts ----------
@@ -289,7 +382,7 @@ const AskAll = (() => {
     SITES, siteById, ERRORS, sleep,
     getSettings, saveSettings, getOverrides, cfgFor,
     getHistory, putRound, clearHistory,
-    runSite, testSite, focusTab, tabForSite,
+    runSite, runJob, ACTIVE, testSite, focusTab, tabForSite,
     factCheckPrompt, buildCombinePrompt
   };
 })();
