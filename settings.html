@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ask All – Settings</title>
+  <link rel="stylesheet" href="hub.css">
+  <style>
+    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .grid { display: grid; grid-template-columns: 220px 1fr; gap: 8px 14px; align-items: center; margin-top: 10px; }
+    #json { font: 12px/1.45 Consolas, "Cascadia Mono", monospace; min-height: 420px; }
+    #msg, #testOut { white-space: pre-wrap; font-size: 13px; }
+    .ok { color: var(--ok); } .bad { color: var(--err); }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tabs button.active { border-color: var(--accent); background: rgba(91,140,255,.15); }
+    code { background: #0c0e12; padding: 1px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <h1>Ask All – Settings</h1>
+    <span class="spacer"></span>
+    <a class="ghost btnlink" href="hub.html">Open Hub</a>
+  </header>
+  <div class="wrap">
+    <section class="card">
+      <h2>General</h2>
+      <div class="grid">
+        <label for="timeoutSec">Give up after (seconds)</label>
+        <input type="number" id="timeoutSec" min="20" max="900" step="10">
+        <label for="newChatEachRound">New chat each round</label>
+        <input type="checkbox" id="newChatEachRound">
+        <label for="pinTabs">Open new site tabs pinned</label>
+        <input type="checkbox" id="pinTabs">
+      </div>
+      <div class="row"><button id="saveGeneral" class="primary">Save</button><span id="generalMsg" class="small muted"></span></div>
+    </section>
+
+    <section class="card">
+      <h2>Site selectors</h2>
+      <p class="small muted">
+        When a site changes its layout and Ask All can't find the message box, the send button or the answer,
+        fix the CSS selectors here. Each list is tried in order. Tip: on the site, right-click the message box →
+        Inspect, and look for a stable attribute such as <code>data-testid</code>, <code>aria-label</code> or <code>id</code>.
+        Built-in selectors were last researched on <span id="selDate"></span>.
+      </p>
+      <div class="tabs" id="siteTabs"></div>
+      <textarea id="json" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="saveSite" class="primary">Save</button>
+        <button id="resetSite">Reset to defaults</button>
+        <button id="testSite">Test site</button>
+        <span id="customFlag" class="small muted"></span>
+      </div>
+      <div id="msg"></div>
+      <div id="testOut" class="muted"></div>
+    </section>
+  </div>
+  <script src="sites.js"></script>
+  <script src="runner.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>
