@@ -3,10 +3,15 @@
 <head>
   <meta charset="utf-8">
   <title>Ask All – Settings</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="hub.css">
   <style>
     .wrap { max-width: 980px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
     .grid { display: grid; grid-template-columns: 220px 1fr; gap: 8px 14px; align-items: center; margin-top: 10px; }
+    .grid select { max-width: 100%; }
+    @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } .wrap { padding: 8px; } }
+    body.touch select, body.touch input[type=number] { min-height: 44px; font-size: 16px; }
+    body.touch input[type=checkbox] { width: 24px; height: 24px; }
     #json { font: 12px/1.45 Consolas, "Cascadia Mono", monospace; min-height: 420px; }
     #msg, #testOut { white-space: pre-wrap; font-size: 13px; }
     .ok { color: var(--ok); } .bad { color: var(--err); }
@@ -29,9 +34,25 @@
         <input type="number" id="timeoutSec" min="20" max="900" step="10">
         <label for="newChatEachRound">New chat each round</label>
         <input type="checkbox" id="newChatEachRound">
-        <label for="pinTabs">Open new site tabs pinned</label>
+        <label for="pinTabs" id="pinRow">Open new site tabs pinned</label>
         <input type="checkbox" id="pinTabs">
+        <label for="runMode">Ask the sites</label>
+        <select id="runMode">
+          <option value="auto" id="runModeAuto">Automatic</option>
+          <option value="parallel">All at once (computer)</option>
+          <option value="sequential">One at a time, tab in front (phone)</option>
+        </select>
+        <label for="returnToHub">One at a time: come back to the Hub at the end</label>
+        <input type="checkbox" id="returnToHub">
+        <label for="layout">Hub layout</label>
+        <select id="layout">
+          <option value="auto">Computer (grid)</option>
+          <option value="landscape">Phone, landscape: answers side by side (recommended)</option>
+          <option value="portrait">Phone, portrait: answers stacked</option>
+        </select>
       </div>
+      <p class="small muted">On Android, Firefox freezes tabs that are not on screen, so a site in a hidden tab never finishes its answer.
+        That's why "Automatic" asks one site at a time there: each site's tab comes to the front while it answers.</p>
       <div class="row"><button id="saveGeneral" class="primary">Save</button><span id="generalMsg" class="small muted"></span></div>
     </section>
 
@@ -55,6 +76,7 @@
       <div id="testOut" class="muted"></div>
     </section>
   </div>
+  <script src="compat.js"></script>
   <script src="sites.js"></script>
   <script src="runner.js"></script>
   <script src="settings.js"></script>

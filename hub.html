@@ -12,8 +12,14 @@
     <span class="sub">one question, every AI tab you're logged in to</span>
     <span class="spacer"></span>
     <button id="historyToggle" class="ghost" title="Show / hide history">History</button>
+    <button id="layoutBtn" class="ghost" title="Change the layout" hidden>Layout</button>
     <a class="ghost btnlink" href="settings.html" target="_blank">Settings</a>
   </header>
+
+  <div id="rotateHint" class="hint" hidden>
+    <span>Turn your phone sideways to see the answers side by side.</span>
+    <button id="usePortrait" class="mini">Use portrait layout</button>
+  </div>
 
   <div class="layout">
     <main>
@@ -30,6 +36,7 @@
             <input type="checkbox" id="newChat"> New chat each round
           </label>
           <span class="spacer"></span>
+          <button id="stopBtn" class="danger" hidden>Stop</button>
           <button id="sendBtn" class="primary">Send to all</button>
         </div>
         <div id="roundInfo" class="muted small"></div>
@@ -67,11 +74,28 @@
         <span class="spacer"></span>
         <button id="clearHistory" class="mini">Clear</button>
       </div>
-      <div class="muted small">Last 50 rounds, kept only on this PC.</div>
+      <div class="muted small" id="historyNote">Last 50 rounds, kept only on this PC.</div>
       <ol id="historyList"></ol>
     </aside>
   </div>
 
+  <div id="chooser" class="overlay" hidden>
+    <div class="card chooser">
+      <h2>How do you want to see the answers?</h2>
+      <p class="muted">You can change this any time in Settings.</p>
+      <button class="choice primary" data-layout="landscape">
+        <b>Landscape (recommended)</b>
+        <span>Hold the phone sideways. Answers sit side by side in columns; swipe left and right to compare them.</span>
+      </button>
+      <button class="choice" data-layout="portrait">
+        <b>Portrait</b>
+        <span>Hold the phone upright. Answers are stacked one under the other; scroll down through them.</span>
+      </button>
+      <p class="small muted" id="chooserNote"></p>
+    </div>
+  </div>
+
+  <script src="compat.js"></script>
   <script src="sites.js"></script>
   <script src="runner.js"></script>
   <script src="hub.js"></script>

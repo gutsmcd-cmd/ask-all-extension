@@ -1,16 +1,33 @@
-// Ask All (PC) - Hub page.
+// Ask All - Hub page.
+// Chrome: the Hub page runs each job itself (as before).
+// Firefox: the background page runs it (AskAllEnv.hasBackgroundRunner) and the Hub
+// shows progress from storage, so a round keeps going while this tab is hidden
+// (on Android, hidden tabs are frozen).
 (() => {
   const $ = (id) => document.getElementById(id);
   const A = globalThis.AskAll;
+  const ext = globalThis.ext || globalThis.chrome;
+  const ENV = globalThis.AskAllEnv;
   const SITES = A.SITES;
   const nameOf = (id) => (A.siteById(id) || { name: id }).name;
 
   let settings = null;
   let round = null;            // the round being shown
-  const running = {};          // siteId -> true while a site is working
-  let combining = false;
+  let jobActive = false;       // a send / retry / combine is in progress
+  let jobKind = null;
+  let localCancel = null;      // Chrome: cancel flag of the job running in this page
+  let hubTabId = null;
+  const bgMode = !!(ENV && ENV.hasBackgroundRunner);
 
   // ---------- helpers ----------
+  function muted(el, text) {
+    el.textContent = '';
+    const sp = document.createElement('span');
+    sp.className = 'muted';
+    sp.textContent = text;
+    el.appendChild(sp);
+  }
+
   function renderText(el, text) {
     el.textContent = '';
     const re = /https?:\/\/[^\s<>()\[\]"']+[^\s<>()\[\]"'.,;:!?]/g;
@@ -30,14 +47,20 @@
   }
 
   function statusLabel(st) {
-    return { idle: 'idle', opening: 'opening tab', typing: 'typing', waiting: 'waiting for answer', done: 'done', error: 'error', timeout: 'timeout' }[st] || st;
+    return { idle: 'idle', queued: 'waiting its turn', opening: 'opening tab', typing: 'typing', waiting: 'waiting for answer', done: 'done', error: 'error', timeout: 'timeout', stopped: 'stopped' }[st] || st;
   }
 
-  function anyRunning() { return combining || Object.values(running).some(Boolean); }
+  function anyRunning() { return jobActive; }
+
+  function isSequential() {
+    const m = settings.runMode || 'auto';
+    return m === 'sequential' || (m === 'auto' && !!ENV.isAndroid);
+  }
 
   function refreshButtons() {
     $('sendBtn').disabled = anyRunning();
-    $('sendBtn').textContent = Object.values(running).some(Boolean) ? 'Working…' : 'Send to all';
+    $('sendBtn').textContent = jobActive && jobKind !== 'combine' ? 'Working…' : 'Send to all';
+    $('stopBtn').hidden = !jobActive;
     const doneCount = round ? Object.values(round.answers).filter((a) => a.status === 'done' && a.text).length : 0;
     $('combineBtn').disabled = anyRunning() || doneCount < 2;
     $('combineBtn').title = doneCount < 2 ? 'Needs at least 2 finished answers' : '';
@@ -114,7 +137,7 @@
     p.querySelector('.perr').textContent = a.error ? (A.ERRORS[a.error] || a.error) + (a.detail ? ' (' + a.detail + ')' : '') : '';
     const body = p.querySelector('.pbody');
     if (a.text) renderText(body, a.text);
-    else body.innerHTML = '<span class="muted">' + (a.status === 'idle' ? 'Waiting for a question.' : (a.status === 'error' || a.status === 'timeout') ? 'No answer.' : '…') + '</span>';
+    else muted(body, a.status === 'idle' ? 'Waiting for a question.' : (a.status === 'error' || a.status === 'timeout' || a.status === 'stopped') ? 'No answer.' : a.status === 'queued' ? 'Waiting for its turn.' : '…');
   }
 
   async function copy(text, btn) {
@@ -133,26 +156,61 @@
   }
 
   // ---------- running ----------
-  async function runOne(id) {
-    running[id] = true;
+  function paintAll() {
+    if (!round) return;
+    for (const id of round.sites) paint(id);
+    renderCombined();
     refreshButtons();
-    const r = round;
-    r.answers[id] = { status: 'opening', text: '', error: null, detail: '' };
-    paint(id);
-    const res = await A.runSite(id, r.prompt, {
-      settings,
-      fresh: settings.newChatEachRound,
-      update: (patch) => {
-        Object.assign(r.answers[id], patch);
-        if (round === r) paint(id);
-      }
-    });
-    Object.assign(r.answers[id], { status: res.status, text: res.text, error: res.error, detail: res.detail, tabId: res.tabId, ms: Date.now() - res.startedAt });
-    running[id] = false;
-    if (round === r) paint(id);
-    await A.putRound(r);
+  }
+
+  // A job changed the round (called directly in Chrome, via storage in Firefox).
+  function applyLive(r) {
+    if (round && round.id === r.id && round !== r) {
+      round.answers = r.answers;
+      round.combined = r.combined;
+    }
+    if (round && round.id === r.id) paintAll();
+  }
+
+  function jobDone() {
+    jobActive = false;
+    jobKind = null;
+    localCancel = null;
     refreshButtons();
     renderHistory();
+  }
+
+  async function startJob(job) {
+    jobActive = true;
+    jobKind = job.kind;
+    refreshButtons();
+    job.settings = settings;
+    job.sequential = isSequential();
+    job.hubTabId = hubTabId;
+    if (bgMode) {
+      let res = null;
+      try { res = await ext.runtime.sendMessage({ type: 'askall:run', job: JSON.parse(JSON.stringify(job)) }); } catch (e) { res = { ok: false, error: String(e.message || e) }; }
+      if (!res || !res.ok) {
+        jobDone();
+        alert(res && res.error === 'busy' ? 'Ask All is still working on another question. Wait for it, or press Stop.' : 'Could not start: ' + ((res && res.error) || 'unknown error'));
+      }
+      return; // progress and the end arrive through storage (liveRound)
+    }
+    localCancel = { stopped: false };
+    job.cancel = localCancel;
+    try {
+      await A.runJob(job, { publish: (r) => applyLive(r) });
+    } finally {
+      jobDone();
+    }
+  }
+
+  async function stop() {
+    if (!jobActive) return;
+    $('stopBtn').disabled = true;
+    if (bgMode) { try { await ext.runtime.sendMessage({ type: 'askall:stop' }); } catch (e) { /* ignore */ } }
+    else if (localCancel) localCancel.stopped = true;
+    setTimeout(() => { $('stopBtn').disabled = false; }, 1500);
   }
 
   async function send() {
@@ -171,19 +229,23 @@
       answers: {},
       combined: null
     };
-    for (const id of sites) round.answers[id] = { status: 'opening', text: '' };
+    const seq = isSequential();
+    for (const id of sites) round.answers[id] = { status: seq ? 'queued' : 'opening', text: '' };
     renderPanels();
     renderCombined();
-    $('roundInfo').textContent = 'Sent ' + new Date(round.ts).toLocaleTimeString() + (factCheck ? ' · fact-check mode' : '');
+    $('roundInfo').textContent = 'Sent ' + new Date(round.ts).toLocaleTimeString() + (factCheck ? ' · fact-check mode' : '') +
+      (seq ? ' · one at a time: each site comes to the front while it answers, then you come back here' : '');
     await A.putRound(round);
     renderHistory();
-    // All sites in parallel. Each one is sent exactly once; use Retry to send again.
-    await Promise.all(sites.map((id) => runOne(id)));
+    if (document.body.classList.contains('phone')) $('panels').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Each site is sent exactly once; use Retry to send again.
+    // All at once on a computer; one at a time (tab in front) on Android.
+    await startJob({ kind: 'round', round });
   }
 
   async function retry(id) {
     if (!round || anyRunning()) return;
-    await runOne(id);
+    await startJob({ kind: 'retry', round, siteId: id });
   }
 
   // ---------- combine ----------
@@ -207,8 +269,8 @@
     }
     const body = $('combinedBody');
     if (c && c.text) renderText(body, c.text);
-    else if (c) body.innerHTML = '<span class="muted">…</span>';
-    else body.innerHTML = '<span class="muted">Press Combine after the answers are in. The answers are sent as Answer A, B, C… so the combining AI doesn\'t know which AI wrote which.</span>';
+    else if (c) muted(body, '…');
+    else muted(body, 'Press Combine after the answers are in. The answers are sent as Answer A, B, C… so the combining AI doesn\'t know which AI wrote which.');
   }
 
   async function combine() {
@@ -219,25 +281,10 @@
     if (answers.length < 2) return;
     const siteId = $('combiner').value;
     const { prompt, mapping } = A.buildCombinePrompt(round.question, answers, round.factCheck);
-    const r = round;
-    r.combined = { siteId, mapping, prompt, status: 'opening', text: '', error: null };
-    combining = true;
-    refreshButtons();
+    round.combined = { siteId, mapping, prompt, status: 'opening', text: '', error: null };
     renderCombined();
-    const res = await A.runSite(siteId, prompt, {
-      settings,
-      fresh: true, // always a NEW chat for the combined answer
-      update: (patch) => {
-        Object.assign(r.combined, patch);
-        if (round === r) renderCombined();
-      }
-    });
-    Object.assign(r.combined, { status: res.status, text: res.text, error: res.error, detail: res.detail, tabId: res.tabId });
-    combining = false;
-    if (round === r) renderCombined();
-    await A.putRound(r);
-    refreshButtons();
-    renderHistory();
+    if (document.body.classList.contains('phone')) $('combinedPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    await startJob({ kind: 'combine', round }); // always a NEW chat for the combined answer
   }
 
   // ---------- history ----------
@@ -276,9 +323,86 @@
     }
   }
 
+  // ---------- layout (phones) ----------
+  // ?phone=1 in the Hub's address previews the phone layout on a computer.
+  const forcePhone = new URLSearchParams(location.search).get('phone') === '1';
+  function isPhone() {
+    if (forcePhone) return true;
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    return !!ENV.isAndroid || (coarse && Math.min(screen.width, screen.height) < 700);
+  }
+
+  function applyLayout() {
+    const b = document.body;
+    const phone = isPhone();
+    const lay = settings.layout || 'auto';
+    b.classList.toggle('phone', phone);
+    b.classList.toggle('touch', phone || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches));
+    b.classList.toggle('layout-landscape', lay === 'landscape');
+    b.classList.toggle('layout-portrait', lay === 'portrait');
+    $('layoutBtn').hidden = !phone && lay === 'auto';
+    $('layoutBtn').textContent = lay === 'landscape' ? 'Layout: landscape' : lay === 'portrait' ? 'Layout: portrait' : 'Layout';
+    updateRotateHint();
+  }
+
+  function updateRotateHint() {
+    const portraitScreen = window.matchMedia && window.matchMedia('(orientation: portrait)').matches;
+    $('rotateHint').hidden = !(settings.layout === 'landscape' && portraitScreen && isPhone());
+  }
+
+  async function setLayout(lay) {
+    settings = await A.saveSettings({ layout: lay, layoutChosen: true });
+    $('chooser').hidden = true;
+    applyLayout();
+  }
+
+  function showChooser() {
+    $('chooserNote').textContent = isSequential()
+      ? 'On a phone, Ask All asks the sites one at a time: each site\'s tab comes to the front while it answers, then you\'re brought back here.'
+      : '';
+    $('chooser').hidden = false;
+  }
+
+  // Firefox: pick up a round the background is (or was) running.
+  async function syncWithBackground() {
+    if (!bgMode) return;
+    let st = null;
+    try { st = await ext.runtime.sendMessage({ type: 'askall:status' }); } catch (e) { st = null; }
+    if (st && st.busy && st.round) {
+      if (!round || round.id !== st.round.id) {
+        round = st.round;
+        $('question').value = round.question;
+        $('factCheck').checked = !!round.factCheck;
+        $('roundInfo').textContent = 'Working · started ' + new Date(round.ts).toLocaleTimeString();
+        renderPanels();
+        renderCombined();
+      }
+      jobActive = true;
+      applyLive(st.round);
+    } else if (jobActive && st && !st.busy) {
+      const { liveRound } = await ext.storage.local.get('liveRound');
+      if (liveRound && round && liveRound.id === round.id) applyLive(liveRound);
+      jobDone();
+    }
+  }
+
   // ---------- init ----------
   async function init() {
+    await ENV.platform();
     settings = await A.getSettings();
+    try { const me = await ext.tabs.getCurrent(); hubTabId = me ? me.id : null; } catch (e) { hubTabId = null; }
+    applyLayout();
+    if (isPhone()) {
+      $('history').classList.add('hidden');
+      $('historyNote').textContent = 'Last 50 rounds, kept only on this device.';
+      $('question').placeholder = 'Type your question (or paste a claim to fact-check)…';
+      if (!settings.layoutChosen) showChooser();
+    }
+    document.querySelectorAll('#chooser [data-layout]').forEach((b) => b.addEventListener('click', () => setLayout(b.dataset.layout)));
+    $('layoutBtn').addEventListener('click', showChooser);
+    $('usePortrait').addEventListener('click', () => setLayout('portrait'));
+    window.addEventListener('resize', updateRotateHint);
+    $('stopBtn').addEventListener('click', stop);
     renderToggles();
     $('factCheck').checked = !!settings.factCheck;
     $('newChat').checked = !!settings.newChatEachRound;
@@ -291,23 +415,35 @@
     $('combinedCopy').addEventListener('click', () => copy(round && round.combined ? round.combined.text : '', $('combinedCopy')));
     $('combinedGo').addEventListener('click', () => round && round.combined && goTo(round.combined.siteId, round.combined.tabId));
     $('clearHistory').addEventListener('click', async () => {
-      if (anyRunning() || !confirm('Delete all saved rounds from this PC?')) return;
+      if (anyRunning() || !confirm('Delete all saved rounds from this ' + (isPhone() ? 'device' : 'PC') + '?')) return;
       await A.clearHistory();
       renderHistory();
     });
     $('historyToggle').addEventListener('click', () => $('history').classList.toggle('hidden'));
     // Settings changed in the other page (e.g. timeout) -> pick them up.
-    chrome.storage.onChanged.addListener(async (ch, area) => {
-      if (area === 'local' && ch.settings) settings = await A.getSettings();
+    ext.storage.onChanged.addListener(async (ch, area) => {
+      if (area !== 'local') return;
+      if (ch.settings) { settings = await A.getSettings(); applyLayout(); }
+      if (bgMode && ch.liveRound && ch.liveRound.newValue) {
+        const live = ch.liveRound.newValue;
+        if (round && live.id === round.id) {
+          applyLive(live);
+          if (live._finished) jobDone();
+        }
+      }
     });
+    // Coming back to this tab (Android unfreezes it): catch up with the background.
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) syncWithBackground(); });
     renderPanels();
     renderCombined();
     renderHistory();
-    $('question').focus();
+    await syncWithBackground();
+    if (!isPhone()) $('question').focus();
   }
 
   window.addEventListener('beforeunload', (e) => {
-    if (anyRunning()) { e.preventDefault(); e.returnValue = ''; }
+    // In Firefox the background keeps working, so closing the Hub is fine.
+    if (anyRunning() && !bgMode) { e.preventDefault(); e.returnValue = ''; }
   });
 
   init();

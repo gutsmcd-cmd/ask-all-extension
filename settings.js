@@ -1,7 +1,9 @@
-// Ask All (PC) - Settings page.
+// Ask All - Settings page.
 (() => {
   const $ = (id) => document.getElementById(id);
   const A = globalThis.AskAll;
+  const ext = globalThis.ext || globalThis.chrome;
+  const ENV = globalThis.AskAllEnv;
   const KEYS = ['composer', 'send', 'stop', 'busy', 'answer', 'answerExclude', 'loggedOut'];
   let current = A.SITES[0].id;
 
@@ -15,6 +17,12 @@
     $('timeoutSec').value = s.timeoutSec;
     $('newChatEachRound').checked = !!s.newChatEachRound;
     $('pinTabs').checked = !!s.pinTabs;
+    $('runMode').value = s.runMode || 'auto';
+    $('returnToHub').checked = s.returnToHub !== false;
+    $('layout').value = s.layout || 'auto';
+    await ENV.platform();
+    $('runModeAuto').textContent = 'Automatic (now: ' + (ENV.isAndroid ? 'one at a time, because this is Android' : 'all at once') + ')';
+    $('pinRow').hidden = $('pinTabs').hidden = !!ENV.isAndroid;
   }
 
   async function loadSite() {
@@ -54,7 +62,7 @@
     } catch (e) { msg(e.message, false); return; }
     const overrides = await A.getOverrides();
     overrides[current] = obj;
-    await chrome.storage.local.set({ overrides });
+    await ext.storage.local.set({ overrides });
     msg('Saved. New questions will use these selectors.', true);
     $('customFlag').textContent = 'Using your edited selectors.';
   }
@@ -62,15 +70,25 @@
   async function resetSite() {
     const overrides = await A.getOverrides();
     delete overrides[current];
-    await chrome.storage.local.set({ overrides });
+    await ext.storage.local.set({ overrides });
     await loadSite();
     msg('Reset to the built-in defaults.', true);
   }
 
   async function testSite() {
     $('testOut').className = 'muted';
-    $('testOut').textContent = 'Testing… (opens the site in a background tab if it is not open yet; nothing is typed)';
-    const r = await A.testSite(current);
+    $('testOut').textContent = ENV.isAndroid
+      ? 'Testing… (the site comes to the front for a moment, then you come back here; nothing is typed)'
+      : 'Testing… (opens the site in a background tab if it is not open yet; nothing is typed)';
+    let r;
+    if (ENV.hasBackgroundRunner) {
+      let me = null;
+      try { me = await ext.tabs.getCurrent(); } catch (e) { me = null; }
+      try { r = await ext.runtime.sendMessage({ type: 'askall:test', siteId: current, returnTabId: me ? me.id : null }); } catch (e) { r = { ok: false, error: String(e.message || e) }; }
+      r = r || { ok: false, error: 'no_access' };
+    } else {
+      r = await A.testSite(current);
+    }
     const lines = [];
     if (r.ok) {
       lines.push('✔ Message box found with: ' + r.composer);
@@ -91,6 +109,8 @@
   }
 
   async function init() {
+    await ENV.platform();
+    document.body.classList.toggle('touch', !!ENV.isAndroid || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches));
     $('selDate').textContent = globalThis.ASK_ALL_SELECTORS_DATE;
     for (const s of A.SITES) {
       const b = document.createElement('button');
@@ -101,7 +121,12 @@
     }
     $('saveGeneral').addEventListener('click', async () => {
       const t = Math.max(20, Math.min(900, parseInt($('timeoutSec').value, 10) || 180));
-      await A.saveSettings({ timeoutSec: t, newChatEachRound: $('newChatEachRound').checked, pinTabs: $('pinTabs').checked });
+      const layout = $('layout').value;
+      await A.saveSettings({
+        timeoutSec: t, newChatEachRound: $('newChatEachRound').checked, pinTabs: $('pinTabs').checked,
+        runMode: $('runMode').value, returnToHub: $('returnToHub').checked,
+        layout, layoutChosen: true
+      });
       $('timeoutSec').value = t;
       $('generalMsg').textContent = 'Saved.';
       setTimeout(() => { $('generalMsg').textContent = ''; }, 1500);
