@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><title>DeepSeek (mock)</title><script src="/__mock/common.js"></script></head>
+<body><div id="thread"></div>
+<div class="chat-input"><textarea id="chat-input" placeholder="Message DeepSeek"></textarea>
+<div role="button" class="ds-button ds-button--primary ds-button--circle ds-button--disabled">↑</div></div>
+<script>
+// React-ish textarea: send enabled only after an input event. No stop selector matches,
+// so the extension must rely on "text stable for stableMs". Has a thinking block to exclude.
+const ta = document.getElementById('chat-input'), btn = document.querySelector('[role=button]');
+ta.addEventListener('input', () => btn.classList.toggle('ds-button--disabled', !ta.value.trim()));
+btn.addEventListener('click', async () => {
+  if (btn.classList.contains('ds-button--disabled')) return;
+  const q = ta.value; ta.value = ''; btn.classList.add('ds-button--disabled'); Mock.log('received', q);
+  const u = document.createElement('div'); u.className = 'ds-message'; u.textContent = q; thread.appendChild(u);
+  const a = document.createElement('div'); a.className = 'ds-message';
+  a.innerHTML = '<div class="ds-markdown ds-markdown--think">SECRET-THOUGHTS should be excluded</div><div class="ds-markdown"></div>'; thread.appendChild(a);
+  await Mock.sleep(600);
+  await Mock.stream(a.querySelector('.ds-markdown:not(.ds-markdown--think)'), 'LIME', q,
+    { wordMs: 80, pauseAfter: 15, pauseMs: 2500, forever: /NEVERSTOP/.test(q) });
+  Mock.log('finished', ''); });
+</script></body></html>

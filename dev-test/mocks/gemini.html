@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Gemini (mock)</title><script src="/__mock/common.js"></script>
+<style>.ql-editor{border:1px solid #888;min-height:40px;padding:6px}</style></head>
+<body><main id="thread"></main>
+<div class="input-area"><rich-textarea><div class="ql-editor" contenteditable="true" aria-label="Enter a prompt for Gemini"></div></rich-textarea>
+<button class="send-button" aria-label="Send message" aria-disabled="true">Send</button></div>
+<script>
+// Quill-like plain contenteditable (paste not handled -> execCommand). Send via the 2nd fallback selector.
+// The composer appears only after 1.5 s (like an Angular app booting).
+const area = document.querySelector('.input-area'); area.style.display = 'none'; setTimeout(() => { area.style.display = ''; }, 1500);
+const ed = document.querySelector('.ql-editor'), send = document.querySelector('.send-button');
+ed.addEventListener('input', () => send.setAttribute('aria-disabled', ed.innerText.trim() ? 'false' : 'true'));
+send.addEventListener('click', async () => {
+  if (send.getAttribute('aria-disabled') === 'true') return;
+  const q = ed.innerText; ed.innerHTML = ''; send.setAttribute('aria-disabled', 'true'); Mock.log('received', q);
+  const stop = document.createElement('button'); stop.setAttribute('aria-label', 'Stop response'); stop.textContent = '■'; area.appendChild(stop);
+  const u = document.createElement('user-query'); u.textContent = q; thread.appendChild(u);
+  const m = document.createElement('model-response'); m.innerHTML = '<message-content><div class="markdown"></div></message-content>'; thread.appendChild(m);
+  await Mock.sleep(1500); // "thinking" with stop button visible but no text yet
+  await Mock.stream(m.querySelector('.markdown'), 'PLUM', q, { wordMs: 50 });
+  stop.remove(); Mock.log('finished', ''); });
+</script></body></html>

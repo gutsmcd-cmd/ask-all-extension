@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><title>ChatGPT (mock)</title><script src="/__mock/common.js"></script>
+<style>#prompt-textarea{border:1px solid #888;min-height:40px;padding:6px}</style></head>
+<body><main id="thread"></main>
+<form id="f"><div id="prompt-textarea" contenteditable="true" class="ProseMirror"></div>
+<button type="button" id="composer-submit-button" data-testid="send-button" aria-label="Send prompt" disabled>Send</button></form>
+<script>
+// IGNORES synthetic paste (so the extension must fall back to execCommand insertText).
+const ed = document.getElementById('prompt-textarea'), send = document.getElementById('composer-submit-button');
+ed.addEventListener('paste', (e) => e.preventDefault());
+ed.addEventListener('input', () => { send.disabled = !ed.innerText.trim(); });
+send.addEventListener('click', async () => {
+  const q = ed.innerText; ed.innerHTML = ''; send.disabled = true; Mock.log('received', q);
+  history.pushState({}, '', '/c/mock-123');
+  const stop = document.createElement('button'); stop.setAttribute('data-testid', 'stop-button'); stop.textContent = 'Stop';
+  document.getElementById('f').appendChild(stop); send.style.display = 'none';
+  const u = document.createElement('div'); u.setAttribute('data-message-author-role', 'user'); u.textContent = q; thread.appendChild(u);
+  const a = document.createElement('div'); a.setAttribute('data-message-author-role', 'assistant');
+  a.innerHTML = '<div class="markdown result-streaming"></div><button>Copy</button>'; thread.appendChild(a);
+  await Mock.stream(a.querySelector('.markdown'), 'MANGO', q, { wordMs: 90 });
+  a.querySelector('.markdown').classList.remove('result-streaming');
+  stop.remove(); send.style.display = ''; Mock.log('finished', ''); });
+</script></body></html>

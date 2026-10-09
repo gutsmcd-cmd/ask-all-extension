@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Claude (mock)</title><script src="/__mock/common.js"></script>
+<style>.ProseMirror{border:1px solid #888;min-height:40px;padding:6px}</style></head>
+<body><main id="thread"></main>
+<fieldset><div class="ProseMirror" contenteditable="true"></div><span id="b"></span></fieldset>
+<script>
+// Uses data-is-streaming (no stop button) like claude.ai; Send button label "Send message".
+const ed = document.querySelector('.ProseMirror'), b = document.getElementById('b');
+ed.addEventListener('paste', (e) => { e.preventDefault(); ed.textContent = e.clipboardData.getData('text/plain'); refresh(); });
+ed.addEventListener('input', refresh);
+function refresh() { b.innerHTML = ed.innerText.trim() ? '<button aria-label="Send message">↑</button>' : ''; }
+b.addEventListener('click', async () => {
+  const q = ed.innerText; ed.innerHTML = ''; refresh(); Mock.log('received', q);
+  history.pushState({}, '', '/chat/mock-abc');
+  const u = document.createElement('div'); u.setAttribute('data-testid', 'user-message'); u.textContent = q; thread.appendChild(u);
+  const a = document.createElement('div'); a.setAttribute('data-is-streaming', 'true');
+  a.innerHTML = '<div class="font-claude-response"></div>'; thread.appendChild(a);
+  await Mock.sleep(500);
+  await Mock.stream(a.querySelector('.font-claude-response'), 'PEAR', q, { wordMs: 70, pauseAfter: 20, pauseMs: 1200 });
+  a.setAttribute('data-is-streaming', 'false'); Mock.log('finished', ''); });
+</script></body></html>

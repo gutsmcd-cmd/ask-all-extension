@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Grok (mock)</title><script src="/__mock/common.js"></script>
+<style>body{font-family:sans-serif} .ProseMirror{border:1px solid #888;min-height:40px;padding:6px} .items-start{border-left:3px solid green;margin:8px;padding:4px}</style></head>
+<body><main id="thread"></main>
+<form id="f"><div data-testid="chat-input"><div class="ProseMirror" contenteditable="true" aria-label="Ask Grok anything"></div></div><span id="btns"></span></form>
+<script>
+// Tiptap/ProseMirror-like: handles PASTE itself (preventDefault) and shows Submit only when there is text.
+const ed = document.querySelector('.ProseMirror'), btns = document.getElementById('btns');
+ed.addEventListener('paste', (e) => { e.preventDefault(); const t = e.clipboardData.getData('text/plain');
+  ed.innerHTML = t.split('\n').map((l) => '<p>' + (l.replace(/</g,'&lt;') || '<br>') + '</p>').join(''); refresh(); });
+ed.addEventListener('input', refresh);
+function refresh() { btns.innerHTML = ed.innerText.trim() ? '<button type="submit" data-testid="chat-submit" aria-label="Submit">Send</button>' : ''; }
+document.getElementById('f').addEventListener('submit', async (e) => { e.preventDefault();
+  const q = ed.innerText; ed.innerHTML = ''; refresh(); Mock.log('received', q);
+  const u = document.createElement('div'); u.id = 'response-u1'; u.className = 'items-end'; u.textContent = q; thread.appendChild(u);
+  btns.innerHTML = '<button type="button" data-testid="chat-stop" aria-label="Stop model response">Stop</button>';
+  const a = document.createElement('div'); a.id = 'response-a1'; a.className = 'items-start';
+  a.innerHTML = '<div class="thinking-container">Thinking about it…</div><div class="response-content-markdown"></div>'; thread.appendChild(a);
+  await Mock.sleep(800);
+  await Mock.stream(a.querySelector('.response-content-markdown'), 'KIWI', q, { pauseAfter: 12, pauseMs: 1500 });
+  btns.innerHTML = ''; Mock.log('finished', ''); });
+</script></body></html>
