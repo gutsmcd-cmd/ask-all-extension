@@ -1,7 +1,14 @@
 {
   "name": "ask-all-extension-dev-test",
   "private": true,
-  "description": "Developer-only end-to-end test of the extension against local mock chat sites. Not needed to use the extension.",
-  "scripts": { "test": "node test.js" },
-  "devDependencies": { "playwright": "^1.64.0" }
+  "description": "Developer-only end-to-end tests of the extension (Chrome via Playwright, Firefox via Selenium/geckodriver) against local mock chat sites. Not needed to use the extension.",
+  "scripts": {
+    "test": "node test.js",
+    "test:firefox": "node test-firefox.js",
+    "test:all": "node test.js && node test-firefox.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.0",
+    "selenium-webdriver": "^4.50.0"
+  }
 }

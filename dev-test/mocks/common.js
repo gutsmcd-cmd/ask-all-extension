@@ -3,7 +3,7 @@ window.Mock = {
   site: location.hostname,
   log(ev, data) {
     return fetch('/__log', { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ site: location.hostname, ev, data, t: Date.now() }) });
+      body: JSON.stringify({ site: location.hostname, ev, data, t: Date.now(), vis: document.visibilityState }) });
   },
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   // Stream an answer into `root` block by block, word by word.

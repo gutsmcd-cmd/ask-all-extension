@@ -1,0 +1,52 @@
+{
+  "manifest_version": 2,
+  "name": "Ask All – one question, every AI",
+  "short_name": "Ask All",
+  "version": "1.1.0",
+  "description": "Ask one question to Grok, ChatGPT, Claude, Gemini (and optionally Meta AI, DeepSeek) in your own logged-in tabs, then have one AI combine the answers. Free, no ads, no tracking, no account.",
+  "author": "Mat McDaniel",
+  "homepage_url": "https://github.com/gutsmcd-cmd/ask-all-extension",
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg",
+    "128": "icons/icon.svg"
+  },
+  "browser_action": {
+    "default_title": "Open Ask All",
+    "default_icon": "icons/icon.svg"
+  },
+  "background": {
+    "scripts": ["compat.js", "sites.js", "runner.js", "background.js"],
+    "persistent": true
+  },
+  "options_ui": {
+    "page": "settings.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage",
+    "https://grok.com/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://www.meta.ai/*",
+    "https://meta.ai/*",
+    "https://chat.deepseek.com/*"
+  ],
+  "content_security_policy": "script-src 'self'; object-src 'self'",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ask-all@gutsmcd-cmd.github.io",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  }
+}
