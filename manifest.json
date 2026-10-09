@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Ask All (PC)",
+  "short_name": "Ask All",
+  "version": "1.0.0",
+  "description": "Ask one question to Grok, ChatGPT, Claude, Gemini (and optionally Meta AI and DeepSeek) in your own logged-in tabs, then combine the answers.",
+  "minimum_chrome_version": "120",
+  "action": {
+    "default_title": "Open Ask All"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "settings.html",
+  "permissions": ["tabs", "scripting", "storage"],
+  "host_permissions": [
+    "https://grok.com/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://www.meta.ai/*",
+    "https://meta.ai/*",
+    "https://chat.deepseek.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
