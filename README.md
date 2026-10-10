@@ -15,7 +15,7 @@ It runs in **desktop Chrome** (and Edge/Brave), **desktop Firefox**, and **Firef
 ## Install on a computer (Chrome, Edge, Brave)
 
 1. Download the ZIP: **https://github.com/gutsmcd-cmd/ask-all-extension/archive/refs/heads/main.zip**
-   While the repository is private, be logged in to GitHub in that browser, or use the green **Code → Download ZIP** button on the repo page.
+   (Or use the green **Code → Download ZIP** button on the repo page.)
 2. Unzip it (right-click → *Extract All…*). You get a folder called `ask-all-extension-main`. Put it somewhere it can stay, e.g. `Documents\ask-all-extension-main`. Don't delete it later: Chrome runs the extension from that folder.
 3. In Chrome, go to **`chrome://extensions`**.
 4. Turn on **Developer mode** (switch at the top right).
@@ -196,9 +196,9 @@ Firefox (release) only installs add-ons that **Mozilla has signed**. Signing is 
 `npx web-ext sign --source-dir dist/firefox --channel unlisted --api-key <JWT issuer> --api-secret <JWT secret>`
 (`--channel listed` for the public listing). Keep the keys secret; never commit them.
 
-### Public or private repository?
+### Why this repository is public
 
-AMO doesn't need the repo at all (the `.xpi` contains the readable source), so it can stay private. But for a free public extension I'd **make it public**: the listing's homepage link (`homepage_url`) points here and would show "404" to everyone else while it's private, people can check that it really collects nothing, and others can send selector fixes when a site changes. There are no secrets in it. (GitHub → Settings → General → Danger Zone → Change visibility.)
+AMO doesn't need the repo (the `.xpi` contains the readable source), but it is public on purpose: the listing's homepage link (`homepage_url`) points here, anyone can check that the extension really collects nothing, and others can send selector fixes when a site changes. There are no secrets in it.
 
 ### AMO listing text
 
